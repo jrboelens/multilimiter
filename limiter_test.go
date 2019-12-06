@@ -34,6 +34,14 @@ func TestLimiterSpec(t *testing.T) {
 			lim.Stop()
 		})
 
+		Convey("Execute can be cancelled", func() {
+			lim := NewDefaultLimiter()
+			lim.Stop()
+
+			err := lim.Execute(EmptyExecuteFunc, DEFAULT_CONTEXT())
+			So(err, ShouldEqual, multilimiter.LimiterStopped)
+		})
+
 		Convey("timeouts occur when", func() {
 			Convey("rate limiter cannot acquire rate quickly enough", func() {
 				// forcing the rate limit to ask for a large amount of tokens

@@ -63,5 +63,11 @@ func TestRateLimiterSpec(t *testing.T) {
 			err := lim.Wait(Context(time.Millisecond * 100))
 			So(err, ShouldBeNil)
 		})
+
+		Convey("Rate returns the original input parameter", func() {
+			rate := 11.0
+			lim := multilimiter.NewRateLimiter(rate)
+			So(lim.Rate(), ShouldEqual, rate)
+		})
 	})
 }

@@ -66,6 +66,10 @@ func TestConcLimiterSpec(t *testing.T) {
 			err := lim.Acquire(Context(time.Millisecond * 0))
 			So(err, ShouldBeNil)
 		})
-	})
 
+		Convey("Concurrency returns the original input parameter", func() {
+			lim := multilimiter.NewConcLimiter(DEFAULT_CONCURRENCY)
+			So(lim.Concurrency(), ShouldEqual, DEFAULT_CONCURRENCY)
+		})
+	})
 }
