@@ -16,6 +16,7 @@ type ConcurrencyTracker struct {
 }
 
 func (me *ConcurrencyTracker) Start() {
+	atomic.StoreInt32(&me.total, 1)
 	me.started = time.Now()
 }
 
