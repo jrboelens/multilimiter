@@ -71,7 +71,8 @@ func (me *BasicLimiter) Execute(ctx context.Context, fn func(context.Context)) e
 	}
 
 	// wait for a slot from the concurrency pool
-	if err := me.concLimiter.Acquire(ctx); err != nil {
+	slot, err := me.concLimiter.Acquire(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -85,7 +86,8 @@ func (me *BasicLimiter) Execute(ctx context.Context, fn func(context.Context)) e
 	go func() {
 		defer func() {
 			r := recover()
-			me.concLimiter.Release()
+			//			me.concLimiter.Release()
+			slot.Release()
 			me.wg.Done()
 			if r != nil {
 				OutStream.Write([]byte(fmt.Sprintf("Panic found in BasicLimiter: %s\n", r)))

@@ -24,12 +24,13 @@ func TestConcLimiterSpec(t *testing.T) {
 			lim := multilimiter.NewConcLimiter(DEFAULT_CONCURRENCY)
 			timeout := time.Millisecond * 100
 
-			err := lim.Acquire(Context(timeout))
+			slot, err := lim.Acquire(Context(timeout))
+			defer slot.Release()
 			So(err, ShouldBeNil)
 
 			lim.Cancel()
 
-			err = lim.Acquire(Context(timeout))
+			_, err = lim.Acquire(Context(timeout))
 			So(err, ShouldEqual, multilimiter.LimiterStopped)
 		})
 
@@ -42,16 +43,17 @@ func TestConcLimiterSpec(t *testing.T) {
 			done := make(chan struct{})
 
 			var err1, err2 error
+			var slot1 multilimiter.Slot
 			go func() {
-				err1 = lim.Acquire(Context(timeout))
+				slot1, err1 = lim.Acquire(Context(timeout))
 
 				go func() {
-					err2 = lim.Acquire(Context(timeout))
+					_, err2 = lim.Acquire(Context(timeout))
 				}()
 
 				time.Sleep(acquireDelay)
 
-				lim.Release()
+				slot1.Release()
 				close(done)
 			}()
 
@@ -63,7 +65,8 @@ func TestConcLimiterSpec(t *testing.T) {
 
 		Convey("Acquire allows a 0 timeout", func() {
 			lim := multilimiter.NewConcLimiter(DEFAULT_CONCURRENCY)
-			err := lim.Acquire(Context(time.Millisecond * 0))
+			slot, err := lim.Acquire(Context(time.Millisecond * 0))
+			defer slot.Release()
 			So(err, ShouldBeNil)
 		})
 
