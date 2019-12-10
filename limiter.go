@@ -18,7 +18,7 @@ type Limiter interface {
 	// execute function fn in a go routine
 	// DeadlineExceeded is returned if the timeout elapses before rate and concurrency slots can be acquired
 	// fn's implementer can choose whether to adhere to the Context parameter's Doneness
-	Execute(fn func(context.Context), ctx context.Context) error
+	Execute(ctx context.Context, fn func(context.Context)) error
 }
 
 // Ensure the Limiter implementation always meets the MultiLimiter interface
@@ -42,7 +42,7 @@ func NewLimiter(opts ...Option) *BasicLimiter {
 		allOpts:     allOpts,
 		concLimiter: allOpts.concLimit.Limiter,
 		rateLimiter: allOpts.rateLimit.Limiter,
-		canceler:    &Canceler{},
+		canceler:    NewCanceler(),
 	}
 }
 
@@ -65,7 +65,7 @@ func (me *BasicLimiter) Wait() {
 // Once available time or concurrency becomes available
 // execute function fn in a go routine
 // DeadlineExceeded is returned if the timeout elapses before rate and concurrency slots can be acquired
-func (me *BasicLimiter) Execute(fn func(context.Context), ctx context.Context) error {
+func (me *BasicLimiter) Execute(ctx context.Context, fn func(context.Context)) error {
 	if me.canceler.IsCanceled() {
 		return LimiterStopped
 	}

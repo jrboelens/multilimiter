@@ -2,6 +2,7 @@ package multilimiter_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/jrboelens/multilimiter"
 	. "github.com/smartystreets/goconvey/convey"
@@ -12,7 +13,7 @@ func TestCancelableSpec(t *testing.T) {
 	Convey("Cancelable tests ", t, func() {
 
 		Convey("Cancel is idempotent", func() {
-			canceler := multilimiter.Canceler{}
+			canceler := multilimiter.NewCanceler()
 
 			So(canceler.IsCanceled(), ShouldEqual, false)
 
@@ -29,19 +30,18 @@ func TestCancelableSpec(t *testing.T) {
 			So(canceler.IsCanceled(), ShouldEqual, true)
 		})
 
-		Convey("a function can be called as part of cancellation if the state flips to canceled", func() {
-			canceler := multilimiter.Canceler{}
+		Convey("The Done() channel is closed after Cancel is called", func() {
+			canceler := multilimiter.NewCanceler()
 			So(canceler.IsCanceled(), ShouldEqual, false)
 
-			changedCount := 0
-			fn := func() { changedCount++ }
+			canceler.Cancel()
 
-			canceler.Cancel(fn)
-			So(changedCount, ShouldEqual, 1)
-
-			// we don't see an increment here because the canceled state didn't change
-			canceler.Cancel(fn)
-			So(changedCount, ShouldEqual, 1)
+			select {
+			case <-canceler.Done():
+			case <-time.After(50 * time.Millisecond):
+				// if we found ourselves here, we've failed
+				So(false, ShouldEqual, true)
+			}
 		})
 	})
 

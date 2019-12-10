@@ -34,13 +34,12 @@ func NewConcLimiter(size int) *BasicConcLimiter {
 	}
 
 	slots := make(chan struct{}, size)
-	done := make(chan struct{})
 
 	for i := 0; i < size; i++ {
 		slots <- struct{}{}
 	}
 
-	return &BasicConcLimiter{size: size, slots: slots, done: done, canceler: &Canceler{}}
+	return &BasicConcLimiter{size: size, slots: slots, canceler: NewCanceler()}
 }
 
 func (me *BasicConcLimiter) Acquire(ctx context.Context) error {
@@ -50,7 +49,7 @@ func (me *BasicConcLimiter) Acquire(ctx context.Context) error {
 
 	// wait for a slot to become available
 	select {
-	case <-me.done:
+	case <-me.canceler.Done():
 		return LimiterStopped
 	case <-ctx.Done():
 		return DeadlineExceeded
@@ -60,9 +59,7 @@ func (me *BasicConcLimiter) Acquire(ctx context.Context) error {
 }
 
 func (me *BasicConcLimiter) Cancel() {
-	me.canceler.Cancel(func() {
-		close(me.done)
-	})
+	me.canceler.Cancel()
 }
 
 func (me *BasicConcLimiter) Release() {
