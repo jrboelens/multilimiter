@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"runtime/debug"
-	"sync"
 )
 
 type Limiter interface {
@@ -18,7 +17,7 @@ type Limiter interface {
 	// execute function fn in a go routine
 	// DeadlineExceeded is returned if the timeout elapses before rate and concurrency slots can be acquired
 	// fn's implementer can choose whether to adhere to the Context parameter's Doneness
-	Execute(fn func(context.Context), ctx context.Context) error
+	Execute(ctx context.Context, fn func(context.Context)) error
 }
 
 // Ensure the Limiter implementation always meets the MultiLimiter interface
@@ -29,7 +28,6 @@ type BasicLimiter struct {
 	allOpts     *options
 	concLimiter ConcLimiter
 	rateLimiter RateLimiter
-	wg          sync.WaitGroup
 	canceler    *Canceler
 }
 
@@ -42,7 +40,7 @@ func NewLimiter(opts ...Option) *BasicLimiter {
 		allOpts:     allOpts,
 		concLimiter: allOpts.concLimit.Limiter,
 		rateLimiter: allOpts.rateLimit.Limiter,
-		canceler:    &Canceler{},
+		canceler:    NewCanceler(),
 	}
 }
 
@@ -59,19 +57,20 @@ func (me *BasicLimiter) Stop() {
 
 // Waits for all executions to complete before returning
 func (me *BasicLimiter) Wait() {
-	me.wg.Wait()
+	me.concLimiter.Wait()
 }
 
 // Once available time or concurrency becomes available
 // execute function fn in a go routine
 // DeadlineExceeded is returned if the timeout elapses before rate and concurrency slots can be acquired
-func (me *BasicLimiter) Execute(fn func(context.Context), ctx context.Context) error {
+func (me *BasicLimiter) Execute(ctx context.Context, fn func(context.Context)) error {
 	if me.canceler.IsCanceled() {
 		return LimiterStopped
 	}
 
 	// wait for a slot from the concurrency pool
-	if err := me.concLimiter.Acquire(ctx); err != nil {
+	slot, err := me.concLimiter.Acquire(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -80,13 +79,11 @@ func (me *BasicLimiter) Execute(fn func(context.Context), ctx context.Context) e
 		return err
 	}
 
-	me.wg.Add(1)
-
 	go func() {
 		defer func() {
 			r := recover()
-			me.concLimiter.Release()
-			me.wg.Done()
+			//			me.concLimiter.Release()
+			slot.Release()
 			if r != nil {
 				OutStream.Write([]byte(fmt.Sprintf("Panic found in BasicLimiter: %s\n", r)))
 				OutStream.Write(debug.Stack())

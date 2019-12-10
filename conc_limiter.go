@@ -2,6 +2,7 @@ package multilimiter
 
 import (
 	"context"
+	"sync"
 )
 
 // Provides a thread-safe mechanism for acquiring and releasing slots
@@ -9,19 +10,35 @@ import (
 type ConcLimiter interface {
 	// Wait for a slot to become available
 	// only DeadlineExceeded and LimiterStopped errors can be returned
-	Acquire(ctx context.Context) error
+	Acquire(ctx context.Context) (Slot, error)
 	// Put the slot back into the pool
-	Release()
+	// Release()
 	// Cancels processing outstanding acquisition requests
 	Cancel()
 	// The configured concurrency
 	Concurrency() int
+	// Wait for all Slots to be returned
+	Wait()
+}
+
+type Slot interface {
+	Release()
+}
+
+type slot struct {
+	once      sync.Once
+	releaseFn func()
+}
+
+func (me *slot) Release() {
+	me.once.Do(me.releaseFn)
 }
 
 type BasicConcLimiter struct {
 	size        int
 	slots, done chan struct{}
 	canceler    *Canceler
+	wg          sync.WaitGroup
 }
 
 var _ ConcLimiter = (*BasicConcLimiter)(nil)
@@ -34,43 +51,46 @@ func NewConcLimiter(size int) *BasicConcLimiter {
 	}
 
 	slots := make(chan struct{}, size)
-	done := make(chan struct{})
 
 	for i := 0; i < size; i++ {
 		slots <- struct{}{}
 	}
 
-	return &BasicConcLimiter{size: size, slots: slots, done: done, canceler: &Canceler{}}
+	return &BasicConcLimiter{size: size, slots: slots, canceler: NewCanceler()}
 }
 
-func (me *BasicConcLimiter) Acquire(ctx context.Context) error {
+func (me *BasicConcLimiter) Acquire(ctx context.Context) (Slot, error) {
 	if me.canceler.IsCanceled() {
-		return LimiterStopped
+		return nil, LimiterStopped
 	}
 
 	// wait for a slot to become available
 	select {
-	case <-me.done:
-		return LimiterStopped
+	case <-me.canceler.Done():
+		return nil, LimiterStopped
 	case <-ctx.Done():
-		return DeadlineExceeded
+		return nil, DeadlineExceeded
 	case <-me.slots:
-		return nil
+		me.wg.Add(1)
+		return &slot{releaseFn: me.release}, nil
 	}
 }
 
 func (me *BasicConcLimiter) Cancel() {
-	me.canceler.Cancel(func() {
-		close(me.done)
-	})
+	me.canceler.Cancel()
 }
 
-func (me *BasicConcLimiter) Release() {
+func (me *BasicConcLimiter) release() {
 	if me.size >= 1 {
+		me.wg.Done()
 		me.slots <- struct{}{}
 	}
 }
 
 func (me *BasicConcLimiter) Concurrency() int {
 	return me.size
+}
+
+func (me *BasicConcLimiter) Wait() {
+	me.wg.Wait()
 }

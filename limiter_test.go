@@ -25,9 +25,9 @@ func TestLimiterSpec(t *testing.T) {
 		Convey("walking Skeleton test", func() {
 			lim := NewDefaultLimiter()
 
-			lim.Execute(EmptyExecuteFunc, DEFAULT_CONTEXT())
-			lim.Execute(EmptyExecuteFunc, DEFAULT_CONTEXT())
-			err := lim.Execute(EmptyExecuteFunc, DEFAULT_CONTEXT())
+			lim.Execute(DEFAULT_CONTEXT(), EmptyExecuteFunc)
+			lim.Execute(DEFAULT_CONTEXT(), EmptyExecuteFunc)
+			err := lim.Execute(DEFAULT_CONTEXT(), EmptyExecuteFunc)
 			So(err, ShouldBeNil)
 
 			lim.Wait()
@@ -38,7 +38,7 @@ func TestLimiterSpec(t *testing.T) {
 			lim := NewDefaultLimiter()
 			lim.Stop()
 
-			err := lim.Execute(EmptyExecuteFunc, DEFAULT_CONTEXT())
+			err := lim.Execute(DEFAULT_CONTEXT(), EmptyExecuteFunc)
 			So(err, ShouldEqual, multilimiter.LimiterStopped)
 		})
 
@@ -58,7 +58,7 @@ func TestLimiterSpec(t *testing.T) {
 
 				lim := multilimiter.NewLimiter(rateOpt, concOpt)
 
-				err := lim.Execute(EmptyExecuteFunc, ctx)
+				err := lim.Execute(ctx, EmptyExecuteFunc)
 				So(err, ShouldEqual, multilimiter.DeadlineExceeded)
 			})
 
@@ -70,12 +70,10 @@ func TestLimiterSpec(t *testing.T) {
 
 				var err1, err2 error
 				go func() {
-					err1 = lim.Execute(func(context.Context) {
-						time.Sleep(timeout * 2)
-					}, Context(0))
+					err1 = lim.Execute(Context(0), func(context.Context) { time.Sleep(timeout * 2) })
 
 					go func() {
-						err2 = lim.Execute(EmptyExecuteFunc, Context(timeout))
+						err2 = lim.Execute(Context(timeout), EmptyExecuteFunc)
 					}()
 
 					time.Sleep(timeout)
@@ -157,7 +155,7 @@ func ExecutesConcurrently(lim multilimiter.Limiter, executions int, ctx context.
 	tracker.Start()
 
 	for i := 0; i < executions; i++ {
-		lim.Execute(func(context.Context) {
+		lim.Execute(ctx, func(context.Context) {
 			tracker.Add()
 
 			for _, fn := range funcs {
@@ -165,7 +163,7 @@ func ExecutesConcurrently(lim multilimiter.Limiter, executions int, ctx context.
 			}
 
 			tracker.Subtract()
-		}, ctx)
+		})
 	}
 	lim.Wait()
 	tracker.Stop()

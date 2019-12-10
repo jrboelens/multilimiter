@@ -26,7 +26,6 @@ type BasicRateLimiter struct {
 	rate     float64
 	bucket   *ratelimit.Bucket
 	canceler *Canceler
-	done     chan struct{}
 }
 
 var _ RateLimiter = (*BasicRateLimiter)(nil)
@@ -36,9 +35,8 @@ func NewRateLimiter(rate float64) RateLimiter {
 	if rate <= 0 {
 		return &NoLimitRateLimiter{}
 	}
-	done := make(chan struct{})
 	bucket := ratelimit.NewBucketWithRate(rate, int64(rate))
-	return &BasicRateLimiter{rate: rate, bucket: bucket, canceler: &Canceler{}, done: done}
+	return &BasicRateLimiter{rate: rate, bucket: bucket, canceler: NewCanceler()}
 }
 
 // This allows us to force a timeout in testing by setting the number of desired tokens to a high value
@@ -57,7 +55,7 @@ func (me *BasicRateLimiter) wait(tokens int64, ctx context.Context) error {
 
 	if d := me.bucket.Take(tokens); d > 0 {
 		select {
-		case <-me.done:
+		case <-me.canceler.Done():
 			return LimiterStopped
 		case <-ctx.Done():
 			return DeadlineExceeded
@@ -73,9 +71,7 @@ func (me *BasicRateLimiter) Rate() float64 {
 }
 
 func (me *BasicRateLimiter) Cancel() {
-	me.canceler.Cancel(func() {
-		close(me.done)
-	})
+	me.canceler.Cancel()
 }
 
 // A Null implementation of RateLimiter
