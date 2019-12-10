@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"runtime/debug"
-	"sync"
 )
 
 type Limiter interface {
@@ -29,7 +28,6 @@ type BasicLimiter struct {
 	allOpts     *options
 	concLimiter ConcLimiter
 	rateLimiter RateLimiter
-	wg          sync.WaitGroup
 	canceler    *Canceler
 }
 
@@ -59,7 +57,7 @@ func (me *BasicLimiter) Stop() {
 
 // Waits for all executions to complete before returning
 func (me *BasicLimiter) Wait() {
-	me.wg.Wait()
+	me.concLimiter.Wait()
 }
 
 // Once available time or concurrency becomes available
@@ -81,14 +79,11 @@ func (me *BasicLimiter) Execute(ctx context.Context, fn func(context.Context)) e
 		return err
 	}
 
-	me.wg.Add(1)
-
 	go func() {
 		defer func() {
 			r := recover()
 			//			me.concLimiter.Release()
 			slot.Release()
-			me.wg.Done()
 			if r != nil {
 				OutStream.Write([]byte(fmt.Sprintf("Panic found in BasicLimiter: %s\n", r)))
 				OutStream.Write(debug.Stack())

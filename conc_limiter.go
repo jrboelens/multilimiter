@@ -17,6 +17,8 @@ type ConcLimiter interface {
 	Cancel()
 	// The configured concurrency
 	Concurrency() int
+	// Wait for all Slots to be returned
+	Wait()
 }
 
 type Slot interface {
@@ -36,6 +38,7 @@ type BasicConcLimiter struct {
 	size        int
 	slots, done chan struct{}
 	canceler    *Canceler
+	wg          sync.WaitGroup
 }
 
 var _ ConcLimiter = (*BasicConcLimiter)(nil)
@@ -68,6 +71,7 @@ func (me *BasicConcLimiter) Acquire(ctx context.Context) (Slot, error) {
 	case <-ctx.Done():
 		return nil, DeadlineExceeded
 	case <-me.slots:
+		me.wg.Add(1)
 		return &slot{releaseFn: me.release}, nil
 	}
 }
@@ -78,10 +82,15 @@ func (me *BasicConcLimiter) Cancel() {
 
 func (me *BasicConcLimiter) release() {
 	if me.size >= 1 {
+		me.wg.Done()
 		me.slots <- struct{}{}
 	}
 }
 
 func (me *BasicConcLimiter) Concurrency() int {
 	return me.size
+}
+
+func (me *BasicConcLimiter) Wait() {
+	me.wg.Wait()
 }
