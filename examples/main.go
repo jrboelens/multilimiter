@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"time"
 
@@ -12,55 +13,17 @@ func DoWork(lim multilimiter.Limiter, iterations, sleepMs int) {
 	tracker := &multilimiter.ConcurrencyTracker{}
 	tracker.Start()
 	for i := 0; i < iterations; i++ {
-		lim.Execute(func(ctx context.Context) {
+		lim.Execute(context.Background(), func(ctx context.Context) {
 			tracker.Add()
-			time.Sleep(time.Duration(sleepMs) * time.Millisecond)
+			if sleepMs > 0 {
+				time.Sleep(time.Duration(sleepMs) * time.Millisecond)
+			}
 			tracker.Subtract()
-		}, context.Background())
+		})
 	}
+	lim.Wait()
 	tracker.Stop()
 	printTracker(tracker)
-}
-
-func RunRateSuite() {
-	rate := 10.00 // in seconds
-	concurrency := 2
-	iterations := 101
-	sleepMs := 0
-
-	RunRateLimiter(rate, concurrency, iterations, sleepMs)
-	RunRateLimiter(rate*10, concurrency, iterations*10, sleepMs)
-	RunRateLimiter(rate*100, concurrency, iterations*100, sleepMs)
-}
-
-func RunRateLimiter(rate float64, concurrency, iterations, sleepMs int) {
-	rateOpt := &multilimiter.RateLimitOption{multilimiter.NewRateLimiter(rate)}
-	lim := multilimiter.NewLimiter(rateOpt)
-	fmt.Printf("Starting RateLimiter %d iterations at %f/s with %d concurrency\n", iterations, rate, concurrency)
-	DoWork(lim, iterations, sleepMs)
-	fmt.Printf("\n")
-}
-
-func RunConcSuite() {
-	rate := 1000.00 // in seconds
-	concurrency := 1
-	iterations := 10010
-	sleepMs := 10
-
-	RunConcLimiter(rate, concurrency, iterations, sleepMs)
-	RunConcLimiter(rate, concurrency*2, iterations, sleepMs)
-	RunConcLimiter(rate, concurrency*4, iterations, sleepMs)
-	RunConcLimiter(rate, concurrency*8, iterations, sleepMs)
-	RunConcLimiter(rate, concurrency*16, iterations, sleepMs)
-}
-
-func RunConcLimiter(rate float64, concurrency, iterations, sleepMs int) {
-	// rateOpt := &multilimiter.RateLimitOption{multilimiter.NewRateLimiter(rate)}
-	// concOpt := &multilimiter.ConcLimitOption{multilimiter.NewConcLimiter(concurrency)}
-	lim := multilimiter.DefaultLimiter(rate, concurrency)
-	fmt.Printf("Starting RateLimiter %d iterations at %f/s with %d concurrency\n", iterations, rate, concurrency)
-	DoWork(lim, iterations, sleepMs)
-	fmt.Printf("\n")
 }
 
 func printTracker(tracker *multilimiter.ConcurrencyTracker) {
@@ -71,6 +34,23 @@ func printTracker(tracker *multilimiter.ConcurrencyTracker) {
 }
 
 func main() {
-	//	RunRateSuite()
-	RunConcSuite()
+	var rate float64
+	var concurrency, iterations, sleepMs int
+
+	flag.Float64Var(&rate, "rate", 1.0, "rate limit")
+	flag.IntVar(&concurrency, "concurrency", 1, "concurrency limit")
+	flag.IntVar(&iterations, "iterations", 1, "number of iterations")
+	flag.IntVar(&sleepMs, "sleepMs", 1, "number of milliseconds to sleep during each Execute()")
+	flag.Parse()
+
+	rateOpt := &multilimiter.RateLimitOption{multilimiter.NewRateLimiter(rate)}
+	concOpt := &multilimiter.ConcLimitOption{multilimiter.NewConcLimiter(concurrency)}
+	lim := multilimiter.NewLimiter(rateOpt, concOpt)
+
+	// Default Limiter offers a more easy way to create a Limiter
+	//lim := multilimiter.DefaultLimiter(rate, concurrency)
+
+	fmt.Printf("Starting Limiter for %d iterations at %f/s with %d concurrency\n", iterations, rate, concurrency)
+	DoWork(lim, iterations, sleepMs)
+	fmt.Printf("\n")
 }

@@ -35,7 +35,7 @@ func NewRateLimiter(rate float64) RateLimiter {
 	if rate <= 0 {
 		return &NoLimitRateLimiter{}
 	}
-	bucket := ratelimit.NewBucketWithRate(rate, int64(rate))
+	bucket := ratelimit.NewBucketWithRate(rate, int64(2))
 	return &BasicRateLimiter{rate: rate, bucket: bucket, canceler: NewCanceler()}
 }
 

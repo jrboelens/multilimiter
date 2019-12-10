@@ -134,14 +134,14 @@ func TestLimiterSpec(t *testing.T) {
 			})
 
 			Convey("runs at ~100/s", func() {
-				rate, minRate, maxRate := 100.0, 85.0, 115.0
+				rate, minRate, maxRate := 100.0, 95.0, 105.0
 				concurrency, executions := DEFAULT_CONCURRENCY, 1000
 
 				RateIsWithinRange(rate, minRate, maxRate, concurrency, executions)
 			})
 
 			Convey("runs at ~1000/s", func() {
-				rate, minRate, maxRate := 1000.0, 850.0, 1150.0
+				rate, minRate, maxRate := 1000.0, 950.0, 1050.0
 				concurrency, executions := DEFAULT_CONCURRENCY, 10000
 
 				RateIsWithinRange(rate, minRate, maxRate, concurrency, executions)
